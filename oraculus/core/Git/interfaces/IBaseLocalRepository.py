@@ -1,42 +1,42 @@
-from abc import ABC, abstractmethod
-from collections.abc import Callable
-from typing import List, Type
-from oraculus.core.metrics import CommitData
+# Interfaces
+from oraculus.core.git.interfaces.IGitRepository import IGitRepository
+from oraculus.core.git.parsers.ICommitParser import ICommitParser
+
+# Python
+from typing import List, Callable
 import subprocess
 
-from oraculus.core.git.parser.ICommitParser import ICommitParser
-from oraculus.core.git.parser.ParserLocalSubprocess import ParserLocalSubprocess
+# Tipos
+from oraculus.core.metrics import CommitData
 
-class IBaseRepository(ABC):
+class IBaseLocalRepository(IGitRepository):
 
-    def __init__(self, raw_repo:str, parser:ICommitParser, limit:int = 10):
-        self.raw_repo = raw_repo.strip()
-        self.ruta_repo_cache:str | None = None
-        self.limit = limit
-        self.parser:ICommitParser = parser
-
-        self._validar()
+    def __init__(self, parser:ICommitParser, limit:int = 10):
+        self._ruta_repo_cache:str | None = None
+        self._limit = limit
+        self._parser:ICommitParser = parser
 
     @property
-    @abstractmethod
     def es_origen_local(self)-> bool:
         pass
 
-    @abstractmethod
-    def obtener_commits(self) -> List[CommitData]:
-        pass
-    
-    @abstractmethod
-    def _preparar_repositorio(self) -> str:
+    @property
+    def commits(self)-> List[CommitData]:
         pass
 
-    @abstractmethod
+    @property
+    def ruta_cache(self)-> str|None:
+        pass
+
+    def _obtener_commits(self) -> List[CommitData]:
+        pass
+    
+    def _preparar_repositorio(self):
+        pass
+
     def _clonar_repositorio(self) -> None:
         pass
 
-    @abstractmethod
-    def _validar(self) -> None:
-        pass
 
     def _ejecutar_clonacion(self, cmd:list[str], mensaje_inicial:str, callback_resultado:Callable[[subprocess.CompletedProcess], None]|None = None) -> None:
         print(mensaje_inicial)
@@ -48,10 +48,10 @@ class IBaseRepository(ABC):
             raise RuntimeError("No se encontró el comando 'git' en el sistema. Asegurarse de tener Git instalado y en tu PATH")
 
     def _commits_desde_carpeta(self) -> str:
-        cmd = ["git", "-c", "safe.directory=*", "log", f"-n", str(self.limit), "--numstat", "--pretty=format:COMMIT:%h|%s"]
+        cmd = ["git", "-c", "safe.directory=*", "log", f"-n", str(self._limit), "--numstat", "--pretty=format:COMMIT:%h|%s"]
 
         try:
-            result = subprocess.run(cmd, cwd=self.ruta_repo_cache, capture_output=True, check=False)
+            result = subprocess.run(cmd, cwd=self._ruta_repo_cache, capture_output=True, check=False)
         except FileNotFoundError:
             #TODO: Cambiar por implementación multilenguaje
             raise RuntimeError("No se encontró el comando 'git' en el sistema. Asegurese de tener Git instalado y configurado en el PATH")

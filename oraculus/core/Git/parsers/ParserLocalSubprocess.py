@@ -1,4 +1,4 @@
-from oraculus.core.git.parser.ICommitParser import ICommitParser
+from oraculus.core.git.parsers.ICommitParser import ICommitParser
 from oraculus.core.metrics import CommitData
 from oraculus.utils.data_helpers import es_archivo_ignorado
 
@@ -46,4 +46,34 @@ class ParserLocalSubprocess(ICommitParser):
                         current_commit.additions += add_val
                         current_commit.deletions += del_val
 
+                    filename = self._normalizar_filename(filepath)
+                    current_commit.archivos_modificados.append(filename)
+
         return commit_data_list
+
+    # Entradas que normaliza
+    # "src/utils/auth.py"
+    # "src/utils/{login.py => auth.py}"
+    # "src/utils/login.py"
+    # "src/puta/login.py => src/utils/login.py"
+
+    # Salida:src/utils/auth.py"
+    def _normalizar_filename(self, raw_filename:str):
+
+        filename:str = raw_filename.replace("\\", "/")
+
+        if not "=>" in filename:
+            return filename
+
+        if not "{" in filename:
+            return filename.split("=>")[-1].strip()
+
+        parts = filename.split("=>")
+
+        ruta_con_nombre_anterior = parts[0]
+        archivo = parts[1]
+
+        ruta_limpia = ruta_con_nombre_anterior.split("{")[0].strip()
+        archivo = archivo.replace("}", "").strip()
+
+        return f"{ruta_limpia}{archivo}"

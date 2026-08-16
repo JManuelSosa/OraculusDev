@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Tuple
 
 @dataclass
@@ -7,6 +7,7 @@ class CommitData:
     mensaje: str
     additions: int = 0
     deletions: int = 0
+    archivos_modificados:List[str] = field(default_factory=list)
 
 def aplicar_tope(loc: int, loc_por_hora: float) -> int:
     tope = int(8 * loc_por_hora)

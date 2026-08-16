@@ -8,24 +8,14 @@ from oraculus.utils.config import preparar_directorio_cache
 from oraculus.core.metrics import CommitData
 from oraculus.utils.i18n import t
 # Interfaces
-from oraculus.core.git.IBaseRepository import IBaseRepository
-from oraculus.core.git.parser.ICommitParser import ICommitParser
+from oraculus.core.git.interfaces.IGitRepository import IGitRepository
+from oraculus.core.git.parsers.ICommitParser import ICommitParser
+from oraculus.core.validators.IRepositoryUrl import IRepositoryUrl
 
-from oraculus.core.git.parser.ParserLocalSubprocess import ParserLocalSubprocess
-from oraculus.core.git.parser.ParserGithubApi import ParserGithubApi
+from oraculus.core.git.parsers.ParserLocalSubprocess import ParserLocalSubprocess
+from oraculus.core.git.parsers.ParserGithubApi import ParserGithubApi
 
-class GithubRepository(IBaseRepository):
-
-    _valid_url_regex = re.compile(
-        r"^(?:https://)?github\.com/"
-        r"(?P<owner>[a-zA-Z0-9][a-zA-Z0-9-]{0,38})/"
-        r"(?P<repository>[a-zA-Z0-9_.-]{1,100})"
-        r"(?:\.git)?$"
-    )
-
-    _valid_identificador_regex = re.compile(
-        r"^(?P<owner>[a-zA-Z0-9][a-zA-Z0-9-]{0,38})/(?P<repository>[a-zA-Z0-9_.-]{1,100})$"
-    )
+class GithubRepository(IGitRepository):
 
     msg_error_status:dict[int, Callable[[Any, requests.Response], str]] = {
         401: lambda self, r: "Error 401: El token de Github proporcionado no es válido o ha expirado.",
@@ -37,91 +27,34 @@ class GithubRepository(IBaseRepository):
         )
     }
 
-    FALLBACK_API_COMMIT_LIMIT = 5
+    API_COMMIT_LIMIT = 5
+    _commits:List[CommitData]|None = None
 
-    def __init__(self, raw_repo:str, limit:int = 10, token:str|None = None):
-        super().__init__(raw_repo=raw_repo,parser=ParserLocalSubprocess(), limit=limit)
-
-        self.token:str|None = token
-
-        info_repo = self._obtener_info_identificador()
-        self.usuario = info_repo["owner"]
-        self.repositorio = info_repo["repository"].removesuffix(".git")
-
-        self.url_remote_repository = self._construir_url()
+    def __init__(self, url_repository:IRepositoryUrl, parser:ICommitParser):
+        self.url_repository:IRepositoryUrl = url_repository
+        self.token:str|None = self.url_repository.token
+        self.identificador:str = self.url_repository.identificador
+        self.parser:ICommitParser = parser
 
     @property
     def es_origen_local(self):
         return False
 
-    def obtener_commits(self)-> List[CommitData]:
-        estrategia_obtencion_commits = None
-        try: 
-            self._preparar_repositorio()
-            estrategia_obtencion_commits = super()._commits_desde_carpeta
-        except Exception as clone_error:
-            print(t('cli', 'info_clone_api_fallback').format(error=clone_error))
-            self.ruta_repo_cache = None
+    @property
+    def ruta_cache(self):
+        None
 
-            self.limit = self.FALLBACK_API_COMMIT_LIMIT
-            estrategia_obtencion_commits = self._commits_desde_api
-            self.parser = ParserGithubApi()
+    @property
+    def commits(self)-> List[CommitData]:
 
-        commits_crudos = estrategia_obtencion_commits()
-        commit_data_list:List[CommitData] = self.parser.parse_to_commit_data_list(commits_crudos)
+        if self._commits is None:
+            commits_crudos = self._obtener_commits()
+            self._commits = self.parser.parse_to_commit_data_list(commits_crudos)
 
-        return commit_data_list
-
-    def _preparar_repositorio(self):
-        carpeta_destino = f"{self.usuario}_{self.repositorio}"
-        self.ruta_repo_cache = preparar_directorio_cache(carpeta_destino)
-        self._clonar_repositorio()
-
-    def _clonar_repositorio(self):
-        # Parámetros de clonado 
-        cmd = ["git", "clone", "--depth", str(self.limit), "--quiet", self.url_remote_repository, self.ruta_repo_cache]
-        mensaje_cmd = f"[Info] Clonando repositorio remoto {self.usuario}/{self.repositorio}"
-
-        def manejar_resultado(result:subprocess.CompletedProcess):
-            if result.returncode != 0:
-                error_limpio = result.stderr.decode('utf-8', errors='ignore').strip()
-                if self.token:
-                    error_limpio = error_limpio.replace(self.token, '******')
-                raise RuntimeError(f"Error al clonar el repositorio: {error_limpio}")
-
-        super()._ejecutar_clonacion(cmd, mensaje_cmd, manejar_resultado)
-
-    def _validar(self):
-        #TODO: Colocar mensaje de error correcto
-        if not self._es_repo_remoto(self.raw_repo): raise ValueError("El repositorio ingresado no es un identificador de repositorio de Github válido")
+        return self._commits
 
 
-    def _es_repo_remoto(self, repo:str) -> bool:
-        return self._es_url(repo) or self._es_identificador(repo)
-
-    def _es_url(self, repo:str) -> bool:
-        return bool(self._valid_url_regex.match(repo))
-
-    def _es_identificador(self, repo:str) -> bool:
-        return bool(self._valid_identificador_regex.match(repo))
-
-    def _obtener_info_identificador(self) -> dict[str, str]:
-        repo = self.raw_repo
-        match = self._valid_identificador_regex.match(repo) or self._valid_url_regex.match(repo)
-
-        return match.groupdict()
-
-    def _construir_url(self):
-        url_token:str = ""
-        at:str = ""
-
-        if self.token:
-            url_token = self.token
-            at = "@"
-
-        return f"https://{url_token}{at}github.com/{self.usuario}/{self.repositorio}.git"
-
-    def _commits_desde_api(self) -> List[dict[str, Any]]:
+    def _obtener_commits(self) -> List[dict[str, Any]]:
         lista_shas:List[str] = self._hacer_peticion_inicial_de_commits()
         lista_detalles_shas:List[dict[str, Any]] = self._obtener_detalles_lista_sha(lista_shas)
 
@@ -129,11 +62,11 @@ class GithubRepository(IBaseRepository):
 
 
     def _hacer_peticion_inicial_de_commits(self)-> List[str]:
-        url:str = f"https://api.github.com/repos/{self.usuario}/{self.repositorio}/commits"
+        url:str = f"https://api.github.com/repos/{self.url_repository.identificador}/commits"
         headers:dict[str, str] = self._obtener_headers_request_api()
 
         try:
-            response = requests.get(url, headers=headers, params={"per_page": self.limit}, timeout=10)
+            response = requests.get(url, headers=headers, params={"per_page": self.API_COMMIT_LIMIT}, timeout=10)
         except requests.RequestException as e:
             raise RuntimeError(f"Error de conexión al conectar con Github: {e}")
 
@@ -161,7 +94,7 @@ class GithubRepository(IBaseRepository):
         if not shas:
             return []
 
-        headers:dict[str, str] = self._obtener_headers_request_api()
+        headers:dict[str, str] = self._obtener_headers()
         workers:int = min(len(shas), 10)
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -176,7 +109,7 @@ class GithubRepository(IBaseRepository):
         return lista_detalles_commits
     
     def _hacer_peticion_detalle_sha(self, sha:str, headers):
-        url:str = f"https://api.github.com/repos/{self.usuario}/{self.repositorio}/commits/{sha}"
+        url:str = f"https://api.github.com/repos/{self.url_repository.identificador}/commits/{sha}"
 
         SHORT_SHA_LENGTH = 7
 
@@ -193,12 +126,12 @@ class GithubRepository(IBaseRepository):
             print(f"[Advertencia] Error de conexión al obtener detalles para el commit {sha_corto}: {error}")
             return None
 
-    def _obtener_headers_request_api(self)-> dict[str, str]:
+    def _obtener_headers(self)-> dict[str, str]:
         headers:dict[str, str] = { "Accept": "application/vnd.github.v3+json" }
 
         if not self.token:
             print("[Advertencia] GITHUB_TOKEN no esta configurado en el archivo .env. Podrías experimentar límites de tasa (Rate Limiting).")
         else:
-            headers["Authorization"] = f"token {self.token}"
+            headers["Authorization"] = f"token {self.url_repository.token}"
 
         return headers

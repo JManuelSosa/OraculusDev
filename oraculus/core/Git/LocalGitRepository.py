@@ -1,51 +1,66 @@
-# Interfaces
-from oraculus.core.git.IBaseRepository import IBaseRepository
-
-# Implementaciones
-from oraculus.core.git.parser.ParserLocalSubprocess import ParserLocalSubprocess
-from oraculus.core.metrics import CommitData
-# Utilidades
+# Python
 import subprocess
 from pathlib import Path
+from typing import List
+# Interfaces
+from oraculus.core.git.interfaces.IBaseLocalRepository import IBaseLocalRepository
+from oraculus.core.git.parsers.ICommitParser import ICommitParser
+# Implementaciones
+from oraculus.core.git.parsers.ParserLocalSubprocess import ParserLocalSubprocess
+# Utilidades
+from oraculus.core.metrics import CommitData
 from oraculus.utils.config import preparar_directorio_cache
 from oraculus.utils.i18n import t
-from typing import List
 
-class LocalGitRepository(IBaseRepository):
 
-    def __init__(self, raw_repo: str, limit: int = 10):
-        super().__init__(raw_repo=raw_repo, parser=ParserLocalSubprocess(), limit=limit)
-        self.ruta_absoluta = Path(self.raw_repo).absolute()
+class LocalGitRepository(IBaseLocalRepository):
+
+    _commits:List[CommitData]|None = None
+
+    def __init__(self, raw_repo: str, parser:ICommitParser, limit: int = 10):
+        super().__init__(parser, limit)
+        self.raw_repo = raw_repo.strip()
+        self._validar()
+        self._ruta_absoluta = Path(self.raw_repo).absolute()
+        self._preparar_repositorio()
 
     @property
-    def es_origen_local(self):
+    def es_origen_local(self)-> bool:
         return True
+
+    @property
+    def commits(self)-> List[CommitData]:
+        if self._commits is None:
+            self._commits = self._obtener_commits()
+
+        return self._commits
+
+    @property
+    def ruta_cache(self)-> str:
+        return self._ruta_repo_cache
     
-    def obtener_commits(self)-> List[CommitData]:
-        try:
-            self._preparar_repositorio()
-        except RuntimeError as e:
-            print(f"[Advertencia] No se pudo crear el caché seguro: {e}")
-            print("[Advertencia] Se operará sobre el repositorio original.")
-
-            self.ruta_repo_cache = self.ruta_absoluta
-
+    def _obtener_commits(self)-> List[CommitData]:
         commits_crudo:str = super()._commits_desde_carpeta()
-        commit_data_list:List[CommitData] = self.parser.parse_to_commit_data_list(commits_crudo)
+        commit_data_list:List[CommitData] = self._parser.parse_to_commit_data_list(commits_crudo)
 
         return commit_data_list
 
     def _preparar_repositorio(self):
         # Preparar carpeta
-        carpeta_destino = "local_copy_" + self.ruta_absoluta.name
-        self.ruta_repo_cache = preparar_directorio_cache(carpeta_destino)
+        carpeta_destino = "local_copy_" + self._ruta_absoluta.name
+        self._ruta_repo_cache = preparar_directorio_cache(carpeta_destino)
 
         # Ejecutar proceso de clonado
-        self._clonar_repositorio();
+        try:
+            self._clonar_repositorio();
+        except RuntimeError as e:
+            print(f"[Advertencia] No se pudo crear el caché seguro: {e}")
+            print("[Advertencia] Se operará sobre el repositorio original.")
+            self._ruta_repo_cache = self._ruta_absoluta
 
     def _clonar_repositorio(self):
         # Definimos los parámetros para el clonado
-        cmd = ['git', 'clone', '--quiet', self.ruta_absoluta, self.ruta_repo_cache]
+        cmd = ['git', 'clone', '--quiet', self._ruta_absoluta, self._ruta_repo_cache]
         mensaje_cmd = t('cli', 'info_clonado_local').format(ruta=self.raw_repo)
 
         def manejar_resultado(result:subprocess.CompletedProcess):
