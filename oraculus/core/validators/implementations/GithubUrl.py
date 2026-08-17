@@ -43,13 +43,17 @@ class GithubUrl(IRepositoryUrl):
     def plataforma(self)-> RemotePlatform:
         return self._plataforma
 
+    @property
+    def token(self):
+        return super().token
+
     @classmethod
     def es_formato_valido(cls, raw_repo):
-        match = cls._valid_url_regex.match(raw_repo) or cls._valid_identificador_regex.match(raw_repo)
+        match = cls._valid_url_regex.match(raw_repo)
         return bool(match)
 
     def _validar(self, repo:str)-> re.Match:
-        match = self._valid_url_regex.match(repo)
+        match = self._valid_url_regex.match(repo) or self._valid_identificador_regex.match(repo)
 
         #TODO: Colocar mensaje de error correcto
         if not match: raise ValueError("[Error de validacion] El repositorio ingresado no es un repositorio de Github válido")

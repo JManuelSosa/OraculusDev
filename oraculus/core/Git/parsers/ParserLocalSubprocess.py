@@ -40,13 +40,13 @@ class ParserLocalSubprocess(ICommitParser):
 
                 if len(parts) >= self.NUMSTAT_REQUIRED_FIELDS:
                     add_str, del_str, filepath = parts[0], parts[1], parts[2]
-                    if not es_archivo_ignorado(filepath):
+                    filename = self._normalizar_filename(filepath)
+                    if not es_archivo_ignorado(filename):
                         add_val = int(add_str) if add_str.isdigit() else 0
                         del_val = int(del_str) if del_str.isdigit() else 0
                         current_commit.additions += add_val
                         current_commit.deletions += del_val
 
-                    filename = self._normalizar_filename(filepath)
                     current_commit.archivos_modificados.append(filename)
 
         return commit_data_list

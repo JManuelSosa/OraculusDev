@@ -38,7 +38,7 @@ class RemoteGitRepository(IBaseLocalRepository):
 
     def _obtener_commits(self):        
         commits_crudos = super()._commits_desde_carpeta()
-        list_commits:CommitData = self.parser.parse_to_commit_data_list(commits_crudos)
+        list_commits:CommitData = self._parser.parse_to_commit_data_list(commits_crudos)
 
         return list_commits
 
@@ -49,7 +49,7 @@ class RemoteGitRepository(IBaseLocalRepository):
 
     def _clonar_repositorio(self):
         # Parámetros de clonado
-        cmd = ["git", "clone", "--depth", str(self.limit), "--quiet", self.url_repository.url, self._ruta_repo_cache]
+        cmd = ["git", "clone", "--depth", str(self._limit), "--quiet", self.url_repository.url, self._ruta_repo_cache]
         mensaje_cmd = f"[Info] Clonando repositorio remoto {self.url_repository.identificador}"
 
         def manejar_resultado(result:subprocess.CompletedProcess):

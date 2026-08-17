@@ -202,6 +202,6 @@ def clonar_local_a_cache(ruta_local: str) -> str:
 def preparar_repositorio_analisis(repo: str, limite: int, token: str = None):
     
     repositorio = RepositoryFactory.crear(raw_repo=repo, limit=limite, token=token)
-    commits = repositorio.obtener_commits()
+    commits = repositorio.commits
 
-    return commits, repositorio.ruta_repo_cache, repositorio.es_origen_local
+    return commits, repositorio.ruta_cache, repositorio.es_origen_local

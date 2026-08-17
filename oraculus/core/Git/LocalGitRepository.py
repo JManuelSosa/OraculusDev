@@ -61,7 +61,7 @@ class LocalGitRepository(IBaseLocalRepository):
     def _clonar_repositorio(self):
         # Definimos los parámetros para el clonado
         cmd = ['git', 'clone', '--quiet', self._ruta_absoluta, self._ruta_repo_cache]
-        mensaje_cmd = t('cli', 'info_clonado_local').format(ruta=self.raw_repo)
+        mensaje_cmd = t('cli', 'info_clonando_local').format(ruta=self.raw_repo)
 
         def manejar_resultado(result:subprocess.CompletedProcess):
             if result.returncode != 0:

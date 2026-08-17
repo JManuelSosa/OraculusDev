@@ -19,7 +19,7 @@ class GithubRepository(IGitRepository):
 
     msg_error_status:dict[int, Callable[[Any, requests.Response], str]] = {
         401: lambda self, r: "Error 401: El token de Github proporcionado no es válido o ha expirado.",
-        404: lambda self, r: f"Error 404: No se encontró el repositorio '{self.usuario}/{self.repositorio}'. Verifica que el nombre sea correcto y que el repositorio sea público (o que tu token tenga acceso si es privado).",
+        404: lambda self, r: f"Error 404: No se encontró el repositorio '{self.identificador}'. Verifica que el nombre sea correcto y que el repositorio sea público (o que tu token tenga acceso si es privado).",
         403: lambda self, r: (
             "Error 403: Se ha alcanzado el límite de tasa (rate limit) de la API de GitHub. Intenta de nuevo más tarde o configura un GITHUB_TOKEN válido." 
             if r.headers.get("X-RateLimit-Remaining") == "0"
@@ -63,7 +63,7 @@ class GithubRepository(IGitRepository):
 
     def _hacer_peticion_inicial_de_commits(self)-> List[str]:
         url:str = f"https://api.github.com/repos/{self.url_repository.identificador}/commits"
-        headers:dict[str, str] = self._obtener_headers_request_api()
+        headers:dict[str, str] = self._obtener_headers()
 
         try:
             response = requests.get(url, headers=headers, params={"per_page": self.API_COMMIT_LIMIT}, timeout=10)
@@ -80,7 +80,7 @@ class GithubRepository(IGitRepository):
 
         commits_json = response.json()
 
-        if not commits_json: return
+        if not commits_json: return []
 
         lista_commits:List[str] = []
 
@@ -88,6 +88,9 @@ class GithubRepository(IGitRepository):
             sha:str = commit['sha']
             lista_commits.append(sha)
 
+        print("Los headers son")
+        print("\n")
+        print(headers)
         return lista_commits
 
     def _obtener_detalles_lista_sha(self, shas:List[str])-> List[dict[str, Any]]:
@@ -110,13 +113,13 @@ class GithubRepository(IGitRepository):
     
     def _hacer_peticion_detalle_sha(self, sha:str, headers):
         url:str = f"https://api.github.com/repos/{self.url_repository.identificador}/commits/{sha}"
-
         SHORT_SHA_LENGTH = 7
 
         sha_corto = sha[:SHORT_SHA_LENGTH]
 
         try:
             response = requests.get(url, headers=headers, timeout=10)
+
             if response.status_code != 200:
                 print(f"[Advertencia] No se pudieron obtener detalles para el commit {sha_corto}. Codigo: {response.status_code}")
                 return None

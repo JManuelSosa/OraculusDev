@@ -9,7 +9,7 @@ from oraculus.core.git.parsers.ICommitParser import ICommitParser
 from oraculus.core.git.LocalGitRepository import LocalGitRepository
 from oraculus.core.git.RemoteGitRepository import RemoteGitRepository
 from oraculus.core.git.GithubRepository import GithubRepository
-from oraculus.core.validators.implementations import GithubUrl
+from oraculus.core.validators.implementations.GithubUrl import GithubUrl
 
 # Parsers
 from oraculus.core.git.parsers.ParserLocalSubprocess import ParserLocalSubprocess
