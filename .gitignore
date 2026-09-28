@@ -8,3 +8,10 @@ __pycache__/
 # Agregados para test
 .vscode
 /test
+# Archivos compilados/Optimizados/Archivos DLL
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Cache y compilación
+*.egg-info/
